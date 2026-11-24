@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       # 1. Checkout source code
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -45,23 +46,46 @@ jobs:
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
 
-          echo "STEP 2: Checking secrets"
+          echo "STEP 2: Validating secrets"
           test -n "$EC2_HOST"
           test -n "$EC2_SSH_KEY"
 
-          echo "STEP 3: Writing private key"
+          echo "STEP 3: Writing SSH private key"
           printf '%s\n' "$EC2_SSH_KEY" > "$HOME/.ssh/ec2_key"
           chmod 600 "$HOME/.ssh/ec2_key"
 
           echo "STEP 4: Validating private key"
           ssh-keygen -y -f "$HOME/.ssh/ec2_key" > /dev/null
 
-          echo "STEP 5: Scanning EC2 SSH host"
-          ssh-keyscan -T 10 -p 22 -H "$EC2_HOST" >> "$HOME/.ssh/known_hosts"
+          echo "STEP 5: Testing EC2 port 22"
+          if ! timeout 10 bash -c "echo > /dev/tcp/$EC2_HOST/22"; then
+            echo "ERROR: EC2 SSH port 22 is unreachable"
+            exit 1
+          fi
+
+          echo "STEP 6: Scanning EC2 host key"
+          ssh-keyscan -T 10 -p 22 -H "$EC2_HOST" > "$HOME/.ssh/known_hosts"
+
+          test -s "$HOME/.ssh/known_hosts"
 
           echo "SSH configuration completed successfully"
 
-      # 5. Copy JAR to EC2
+      # 5. Test SSH connection
+      - name: Test SSH Connection
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        run: |
+          set -e
+
+          ssh -i "$HOME/.ssh/ec2_key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            "$EC2_USERNAME@$EC2_HOST" \
+            "echo 'EC2 SSH Connection Successful'"
+
+      # 6. Deploy JAR to EC2
       - name: Deploy JAR to EC2
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -69,17 +93,23 @@ jobs:
         run: |
           set -e
 
+          echo "Creating deployment directory"
+
           ssh -i "$HOME/.ssh/ec2_key" \
             -o IdentitiesOnly=yes \
             "$EC2_USERNAME@$EC2_HOST" \
             "mkdir -p /home/ubuntu/springboot-cicd-demo/target"
+
+          echo "Copying JAR to EC2"
 
           scp -i "$HOME/.ssh/ec2_key" \
             -o IdentitiesOnly=yes \
             target/cicd-demo-0.0.1-SNAPSHOT.jar \
             "$EC2_USERNAME@$EC2_HOST:/home/ubuntu/springboot-cicd-demo/target/"
 
-      # 6. Restart Spring Boot service
+          echo "JAR deployment completed"
+
+      # 7. Restart Spring Boot service
       - name: Restart Application
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -87,8 +117,12 @@ jobs:
         run: |
           set -e
 
+          echo "Restarting Spring Boot application"
+
           ssh -i "$HOME/.ssh/ec2_key" \
             -o IdentitiesOnly=yes \
             "$EC2_USERNAME@$EC2_HOST" \
             "sudo systemctl restart cicd-demo && \
              sudo systemctl is-active cicd-demo"
+
+          echo "Application deployment successful"
