@@ -16,5 +16,10 @@ public class HelloController {
 		System.out.println("Hello");
 		return "Hello! CI/CD Pipeline is working!";
 	}
+	@GetMapping("test")
+	public String test() {
+		System.out.println("Am integrated GitHub Actions in my springBoot application for Auto deploy code changes");
+		return "Am integrated GitHub Actions in my springBoot application for Auto deploy code changes";
+	}
 
 }
