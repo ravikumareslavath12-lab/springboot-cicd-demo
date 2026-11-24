@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       # 1. Checkout source code
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -32,24 +31,35 @@ jobs:
       # 3. Build Spring Boot application
       - name: Build with Maven
         run: mvn -B clean package
-          
-         
+
       # 4. Configure SSH
       - name: Configure SSH
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
+        shell: bash
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+          set -e
 
-          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_key
-          chmod 600 ~/.ssh/ec2_key
+          echo "STEP 1: Creating SSH directory"
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
 
-          ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          echo "STEP 2: Checking secrets"
+          test -n "$EC2_HOST"
+          test -n "$EC2_SSH_KEY"
 
-          echo "SSH configuration completed"
+          echo "STEP 3: Writing private key"
+          printf '%s\n' "$EC2_SSH_KEY" > "$HOME/.ssh/ec2_key"
+          chmod 600 "$HOME/.ssh/ec2_key"
 
+          echo "STEP 4: Validating private key"
+          ssh-keygen -y -f "$HOME/.ssh/ec2_key" > /dev/null
+
+          echo "STEP 5: Scanning EC2 SSH host"
+          ssh-keyscan -T 10 -p 22 -H "$EC2_HOST" >> "$HOME/.ssh/known_hosts"
+
+          echo "SSH configuration completed successfully"
 
       # 5. Copy JAR to EC2
       - name: Deploy JAR to EC2
