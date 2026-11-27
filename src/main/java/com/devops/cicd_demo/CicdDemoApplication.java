@@ -2,12 +2,31 @@ package com.devops.cicd_demo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-public class CicdDemoApplication {
+@EnableConfigurationProperties
+@PropertySource("classpath:appconfig.properties")
+@ComponentScan(basePackages = "com.devops.cicd_demo")
+@EnableScheduling
+public class CicdDemoApplication extends SpringBootServletInitializer{
 
 	public static void main(String[] args) {
 		SpringApplication.run(CicdDemoApplication.class, args);
+	}
+	
+	/**
+	 * Used when run as WAR
+	 */
+	@Override
+	protected SpringApplicationBuilder configure(SpringApplicationBuilder builder) {
+		return builder.sources(CicdDemoApplication.class);
+
 	}
 
 }
